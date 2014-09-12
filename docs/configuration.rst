@@ -17,7 +17,7 @@ file it finds.
 #. :file:`/etc/supervisord.conf`
 
 :file:`supervisord.conf` is a Windows-INI-style (Python ConfigParser)
-file.  It has sections (each denoted by a ``[header]``)and key / value
+file.  It has sections (each denoted by a ``[header]``) and key / value
 pairs within the sections.  The sections and their allowable values
 are described below.
 
@@ -379,10 +379,10 @@ follows.
   Values containing non-alphanumeric characters should be quoted
   (e.g. ``KEY="val:123",KEY2="val,456"``).  Otherwise, quoting the
   values is optional but recommended.  To escape percent characters,
-  simply use two. (e.g. ``URI="/first%%20name"``) **Note** that 
-  subprocesses will inherit the environment variables of the shell 
+  simply use two. (e.g. ``URI="/first%%20name"``) **Note** that
+  subprocesses will inherit the environment variables of the shell
   used to start :program:`supervisord` except for the ones overridden
-  here and within the program's ``environment`` option.  See 
+  here and within the program's ``environment`` option.  See
   :ref:`subprocess_environment`.
 
   *Default*: no values
@@ -496,7 +496,7 @@ follows.
 
   *Required*:  No.
 
-  *Introduced*: post-3.0a4 (not including 3.0a4)
+  *Introduced*: 3.0a5
 
 ``[supervisorctl]`` Section Example
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -538,7 +538,7 @@ where specified.
    will have a single process named ``x`` in it.  This provides a
    modicum of backwards compatibility with older supervisor releases,
    which did not treat program sections as homogeneous process group
-   defnitions.
+   definitions.
 
    But for instance, if you have a ``[program:foo]`` section with a
    ``numprocs`` of 3 and a ``process_name`` expression of
@@ -862,7 +862,7 @@ where specified.
 
   *Required*:  No.
 
-  *Introduced*: 3.1a1
+  *Introduced*: 4.0.0
 
 ``stderr_logfile``
 
@@ -939,7 +939,7 @@ where specified.
 
   *Required*:  No.
 
-  *Introduced*: 3.1a1
+  *Introduced*: 4.0.0
 
 ``environment``
 
@@ -1072,7 +1072,7 @@ configuration.
 ``[group:x]`` Section Settings
 ------------------------------
 
-It is often useful to group "homogeneous" processes groups (aka
+It is often useful to group "homogeneous" process groups (aka
 "programs") together into a "heterogeneous" process group so they can
 be controlled as a unit from Supervisor's various controller
 interfaces.
@@ -1091,7 +1091,7 @@ For a ``[group:x]``, there must be one or more ``[program:x]``
 sections elsewhere in your configuration file, and the group must
 refer to them by name in the ``programs`` value.
 
-If "homogeneous" program groups" (represented by program sections) are
+If "homogeneous" process groups (represented by program sections) are
 placed into a "heterogeneous" group via ``[group:x]`` section's
 ``programs`` line, the homogeneous groups that are implied by the
 program section will not exist at runtime in supervisor.  Instead, all
@@ -1417,3 +1417,70 @@ And a section in the config file meant to configure it.
    [rpcinterface:another]
    supervisor.rpcinterface_factory = my.package:make_another_rpcinterface
    retries = 1
+
+Environment Variable Interpolation
+----------------------------------
+
+There may be a time where it is necessary to avoid hardcoded values in your
+configuration file (such as paths, port numbers, username, etc). Some teams
+may also put their supervisord.conf files under source control but may want
+to avoid committing sensitive information into the repository.
+
+With this, **all** the environment variables inherited by the ``supervisord``
+process are available and can be interpolated / expanded in **any**
+configuration value, under **any** section.
+
+Your configuration values may contain Python expressions for expanding
+the environment variables using the ``ENV_`` prefix. The sample syntax is
+``foo_key=%(ENV_FOO)s``, where the value of the environment variable ``FOO``
+will be assigned to the ``foo_key``. The string values of environment
+variables will be converted properly to their correct types.
+
+.. note::
+  - some sections such as ``[program:x]`` have other extra expansion options.
+  - environment variables in the configuration will be required, otherwise
+    supervisord will refuse to start.
+  - any changes to the variable requires a restart in the ``supervisord``
+    daemon.
+
+
+An example configuration snippet with customizable values:
+
+.. code-block:: ini
+
+   [supervisord]
+   logfile = %(ENV_MYSUPERVISOR_BASEDIR)s/%(ENV_MYSUPERVISOR_LOGFILE)s
+   logfile_maxbytes = %(ENV_MYSUPERVISOR_LOGFILE_MAXBYTES)s
+   logfile_backups=10
+   loglevel = info
+   pidfile = %(ENV_MYSUPERVISOR_BASEDIR)s/supervisor.pid
+   nodaemon = false
+   minfds = 1024
+   minprocs = 200
+   umask = 022
+   user = %(ENV_USER)s
+
+   [program:cat]
+   command=/bin/cat -x -y --optz=%(ENV_CAT_OPTZ)s
+   process_name=%(program_name)s
+   numprocs=%(ENV_CAT_NUMPROCS)s
+   directory=%(ENV_CAT_DIR)s
+   umask=022
+   priority=999
+   autostart=true
+   autorestart=true
+   exitcodes=0,2
+   user=%(ENV_USER)s
+   redirect_stderr=false
+   stopwaitsecs=10
+
+The above sample config will require the following environment variables to be set:
+
+   - ``MYSUPERVISOR_BASEDIR``
+   - ``MYSUPERVISOR_LOGFILE``
+   - ``MYSUPERVISOR_LOGFILE_MAXBYTES``
+   - ``USER``
+   - ``CAT_OPTZ``
+   - ``CAT_NUMPROCS``
+   - ``CAT_DIRECTORY``
+

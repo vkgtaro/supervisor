@@ -31,8 +31,6 @@ class EventSubscriptionNotificationTests(unittest.TestCase):
         L = []
         def callback(event):
             L.append(1)
-        class DummyEvent:
-            pass
         events.callbacks[:] = [(DummyEvent, callback)]
         events.notify(DummyEvent())
         self.assertEqual(L, [1])
@@ -42,8 +40,6 @@ class EventSubscriptionNotificationTests(unittest.TestCase):
         L = []
         def callback(event):
             L.append(1)
-        class DummyEvent:
-            pass
         class AnotherEvent:
             pass
         events.callbacks[:] = [(AnotherEvent, callback)]
@@ -55,14 +51,12 @@ class EventSubscriptionNotificationTests(unittest.TestCase):
         L = []
         def callback(event):
             L.append(1)
-        class DummyEvent:
-            pass
         class ASubclassEvent(DummyEvent):
             pass
         events.callbacks[:] = [(DummyEvent, callback)]
         events.notify(ASubclassEvent())
         self.assertEqual(L, [1])
-        
+
 
 class TestEventTypes(unittest.TestCase):
     def test_ProcessLogEvent_attributes(self):
@@ -135,10 +129,10 @@ class TestEventTypes(unittest.TestCase):
         from supervisor.events import ProcessCommunicationStdoutEvent
         from supervisor.events import ProcessCommunicationEvent
         self.assertTrue(
-            issubclass(ProcessCommunicationStdoutEvent, 
+            issubclass(ProcessCommunicationStdoutEvent,
                        ProcessCommunicationEvent)
         )
-        
+
     def test_ProcessCommunicationStderrEvent_attributes(self):
         from supervisor.events import ProcessCommunicationStderrEvent
         inst = ProcessCommunicationStderrEvent(1, 2, 3)
@@ -151,7 +145,7 @@ class TestEventTypes(unittest.TestCase):
         from supervisor.events import ProcessCommunicationStderrEvent
         from supervisor.events import ProcessCommunicationEvent
         self.assertTrue(
-            issubclass(ProcessCommunicationStderrEvent, 
+            issubclass(ProcessCommunicationStderrEvent,
                        ProcessCommunicationEvent)
         )
 
@@ -190,7 +184,7 @@ class TestEventTypes(unittest.TestCase):
         for klass in (
             events.SupervisorStateChangeEvent,
             events.SupervisorRunningEvent,
-            events.SupervisorStoppingEvent        
+            events.SupervisorStoppingEvent
             ):
             self._test_one_SupervisorStateChangeEvent(klass)
 
@@ -238,11 +232,21 @@ class TestEventTypes(unittest.TestCase):
     def _test_one_TickEvent(self, klass):
         from supervisor.events import TickEvent
         self.assertTrue(issubclass(klass, TickEvent))
-        
+
         inst = klass(1, 2)
         self.assertEqual(inst.when, 1)
         self.assertEqual(inst.supervisord, 2)
-        
+
+    def test_ProcessGroupAddedEvent_attributes(self):
+        from supervisor.events import ProcessGroupAddedEvent
+        inst = ProcessGroupAddedEvent('myprocess')
+        self.assertEqual(inst.group, 'myprocess')
+
+    def test_ProcessGroupRemovedEvent_attributes(self):
+        from supervisor.events import ProcessGroupRemovedEvent
+        inst = ProcessGroupRemovedEvent('myprocess')
+        self.assertEqual(inst.group, 'myprocess')
+
 class TestSerializations(unittest.TestCase):
     def _deserialize(self, serialization):
         data = serialization.split('\n')
@@ -289,7 +293,7 @@ class TestSerializations(unittest.TestCase):
         self.assertEqual(headers['groupname'], 'process1', headers)
         self.assertEqual(headers['pid'], '1', headers)
         self.assertEqual(payload, 'yo')
-            
+
     def test_pcomm_stdout_event(self):
         options = DummyOptions()
         pconfig1 = DummyPConfig(options, 'process1', 'process1','/bin/process1')
@@ -304,7 +308,7 @@ class TestSerializations(unittest.TestCase):
         self.assertEqual(headers['groupname'], 'process1', headers)
         self.assertEqual(headers['pid'], '1', headers)
         self.assertEqual(payload, 'yo')
-            
+
     def test_pcomm_stderr_event(self):
         options = DummyOptions()
         pconfig1 = DummyPConfig(options, 'process1', 'process1','/bin/process1')
@@ -326,6 +330,20 @@ class TestSerializations(unittest.TestCase):
         headers, payload = self._deserialize(str(event))
         self.assertEqual(headers['type'], 'foo', headers)
         self.assertEqual(payload, 'bar')
+
+    def test_process_group_added_event(self):
+        from supervisor.events import ProcessGroupAddedEvent
+        event = ProcessGroupAddedEvent('foo')
+        headers, payload = self._deserialize(str(event))
+        self.assertEqual(headers['groupname'], 'foo')
+        self.assertEqual(payload, '')
+
+    def test_process_group_removed_event(self):
+        from supervisor.events import ProcessGroupRemovedEvent
+        event = ProcessGroupRemovedEvent('foo')
+        headers, payload = self._deserialize(str(event))
+        self.assertEqual(headers['groupname'], 'foo')
+        self.assertEqual(payload, '')
 
     def test_process_state_events_without_extra_values(self):
         from supervisor.states import ProcessStates
@@ -404,7 +422,7 @@ class TestSerializations(unittest.TestCase):
             event = klass(process1, ProcessStates.STARTING)
             headers, payload = self._deserialize(str(event))
             self.assertEqual(headers['tries'], '2')
-        
+
     def test_process_state_exited_event_expected(self):
         from supervisor import events
         from supervisor.states import ProcessStates
@@ -474,6 +492,16 @@ class TestUtilityFunctions(unittest.TestCase):
         for name, value in events.EventTypes.__dict__.items():
             self.assertEqual(events.getEventNameByType(value), name)
 
+    def test_register(self):
+        from supervisor import events
+        self.assertFalse(hasattr(events.EventTypes, 'FOO'))
+        class FooEvent(events.Event):
+            pass
+        try:
+            events.register('FOO', FooEvent)
+            self.assertTrue(events.EventTypes.FOO is FooEvent)
+        finally:
+            del events.EventTypes.FOO
 
 def test_suite():
     return unittest.findTestCases(sys.modules[__name__])

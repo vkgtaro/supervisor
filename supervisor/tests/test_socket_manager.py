@@ -1,12 +1,20 @@
 """Test suite for supervisor.socket_manager"""
 
+import gc
 import sys
 import os
 import unittest
-import socket
+import supervisor.medusa.text_socket as socket
 import tempfile
 
+try:
+    import __pypy__
+    PYPY = True
+except ImportError:
+    PYPY = False
+
 from supervisor.tests.base import DummySocketConfig
+from supervisor.tests.base import DummyLogger
 from supervisor.datatypes import UnixStreamSocketConfig
 from supervisor.datatypes import InetStreamSocketConfig
 
@@ -44,6 +52,7 @@ class ProxyTest(unittest.TestCase):
         proxy = self._makeOne(TestObject(), on_delete=self.setOnDeleteCalled)
         self.assertEqual(5, proxy.getValue())
         proxy = None
+        gc_collect()
         self.assertTrue(self.on_deleteCalled)
 
 class ReferenceCounterTest(unittest.TestCase):
@@ -85,12 +94,23 @@ class ReferenceCounterTest(unittest.TestCase):
         self.assertRaises(Exception, ctr.decrement)
 
 class SocketManagerTest(unittest.TestCase):
+
+    def tearDown(self):
+        gc_collect()
+
     def _getTargetClass(self):
         from supervisor.socket_manager import SocketManager
         return SocketManager
 
     def _makeOne(self, *args, **kw):
         return self._getTargetClass()(*args, **kw)
+
+    def test_repr(self):
+        conf = DummySocketConfig(2)
+        sock_manager = self._makeOne(conf)
+        expected = "<%s at %s for %s>" % (
+            sock_manager.__class__, id(sock_manager), conf.url)
+        self.assertEqual(repr(sock_manager), expected)
 
     def test_get_config(self):
         conf = DummySocketConfig(2)
@@ -112,7 +132,7 @@ class SocketManagerTest(unittest.TestCase):
         self.assertEqual(sock.getsockname(), ('127.0.0.1', 51041))
 
     def test_unix(self):
-        (tf_fd, tf_name) = tempfile.mkstemp();
+        (tf_fd, tf_name) = tempfile.mkstemp()
         conf = UnixStreamSocketConfig(tf_name)
         sock_manager = self._makeOne(conf)
         self.assertEqual(sock_manager.socket_config, conf)
@@ -124,41 +144,59 @@ class SocketManagerTest(unittest.TestCase):
     def test_socket_lifecycle(self):
         conf = DummySocketConfig(2)
         sock_manager = self._makeOne(conf)
-        #Assert that sockets are created on demand
+        # Assert that sockets are created on demand
         self.assertFalse(sock_manager.is_prepared())
-        #Get two socket references
+        # Get two socket references
         sock = sock_manager.get_socket()
         self.assertTrue(sock_manager.is_prepared()) #socket created on demand
         sock_id = id(sock._get())
         sock2 = sock_manager.get_socket()
         sock2_id = id(sock2._get())
-        #Assert that they are not the same proxy object
+        # Assert that they are not the same proxy object
         self.assertNotEqual(sock, sock2)
-        #Assert that they are the same underlying socket
+        # Assert that they are the same underlying socket
         self.assertEqual(sock_id, sock2_id)
-        #Socket not actually closed yet b/c ref ct is 2
+        # Socket not actually closed yet b/c ref ct is 2
+        self.assertEqual(2, sock_manager.get_socket_ref_count())
         self.assertTrue(sock_manager.is_prepared())
         self.assertFalse(sock_manager.socket.close_called)
         sock = None
-        #Socket not actually closed yet b/c ref ct is 1
+        gc_collect()
+        # Socket not actually closed yet b/c ref ct is 1
         self.assertTrue(sock_manager.is_prepared())
         self.assertFalse(sock_manager.socket.close_called)
         sock2 = None
-        #Socket closed
+        gc_collect()
+        # Socket closed
         self.assertFalse(sock_manager.is_prepared())
         self.assertTrue(sock_manager.socket.close_called)
 
-        #Get a new socket reference
+        # Get a new socket reference
         sock3 = sock_manager.get_socket()
         self.assertTrue(sock_manager.is_prepared())
         sock3_id = id(sock3._get())
-        #Assert that it is not the same socket
+        # Assert that it is not the same socket
         self.assertNotEqual(sock_id, sock3_id)
-        #Drop ref ct to zero
+        # Drop ref ct to zero
         del sock3
-        #Now assert that socket is closed
+        gc_collect()
+        # Now assert that socket is closed
         self.assertFalse(sock_manager.is_prepared())
         self.assertTrue(sock_manager.socket.close_called)
+
+    def test_logging(self):
+        conf = DummySocketConfig(1)
+        logger = DummyLogger()
+        sock_manager = self._makeOne(conf, logger=logger)
+        # socket open
+        sock = sock_manager.get_socket()
+        self.assertEqual(len(logger.data), 1)
+        self.assertEqual('Creating socket %s' % repr(conf), logger.data[0])
+        # socket close
+        del sock
+        gc_collect()
+        self.assertEqual(len(logger.data), 2)
+        self.assertEqual('Closing socket %s' % repr(conf), logger.data[1])
 
     def test_prepare_socket(self):
         conf = DummySocketConfig(1)
@@ -176,12 +214,28 @@ class SocketManagerTest(unittest.TestCase):
         sock = sock_manager.get_socket()
         sock_manager2 = self._makeOne(conf)
         self.assertRaises(socket.error, sock_manager2.get_socket)
-        sock = None
+        del sock
 
     def test_unix_bad_sock(self):
         conf = UnixStreamSocketConfig('/notthere/foo.sock')
         sock_manager = self._makeOne(conf)
         self.assertRaises(socket.error, sock_manager.get_socket)
+
+    def test_close_requires_prepared_socket(self):
+        conf = InetStreamSocketConfig('127.0.0.1', 51041)
+        sock_manager = self._makeOne(conf)
+        self.assertFalse(sock_manager.is_prepared())
+        try:
+            sock_manager._close()
+            self.fail()
+        except Exception as e:
+            self.assertEqual(e.args[0], 'Socket has not been prepared')
+
+def gc_collect():
+    if PYPY:
+        gc.collect()
+        gc.collect()
+        gc.collect()
 
 def test_suite():
     return unittest.findTestCases(sys.modules[__name__])

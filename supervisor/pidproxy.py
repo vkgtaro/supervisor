@@ -32,7 +32,7 @@ class PidProxy:
                 break
 
     def usage(self):
-        print "pidproxy.py <pidfile name> <command> [<cmdarg1> ...]"
+        print("pidproxy.py <pidfile name> <command> [<cmdarg1> ...]")
 
     def setsignals(self):
         signal.signal(signal.SIGTERM, self.passtochild)
@@ -49,10 +49,10 @@ class PidProxy:
 
     def passtochild(self, sig, frame):
         try:
-            pid = int(open(self.pidfile, 'r').read().strip())
+            with open(self.pidfile, 'r') as f:
+                pid = int(f.read().strip())
         except:
-            pid = None
-            print "Can't read child pidfile %s!" % self.pidfile
+            print("Can't read child pidfile %s!" % self.pidfile)
             return
         os.kill(pid, sig)
         if sig in [signal.SIGTERM, signal.SIGINT, signal.SIGQUIT]:
@@ -64,6 +64,6 @@ def main():
 
 if __name__ == '__main__':
     main()
-    
-    
-    
+
+
+

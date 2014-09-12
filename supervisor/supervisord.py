@@ -32,8 +32,6 @@ Options:
 
 import os
 import time
-import errno
-import select
 import signal
 
 from supervisor.medusa import asyncore_25 as asyncore
@@ -122,6 +120,7 @@ class Supervisor:
         if name not in self.process_groups:
             config.after_setuid()
             self.process_groups[name] = config.make_group()
+            events.notify(events.ProcessGroupAddedEvent(name))
             return True
         return False
 
@@ -129,20 +128,19 @@ class Supervisor:
         if self.process_groups[name].get_unstopped_processes():
             return False
         del self.process_groups[name]
+        events.notify(events.ProcessGroupRemovedEvent(name))
         return True
 
     def get_process_map(self):
         process_map = {}
-        pgroups = self.process_groups.values()
-        for group in pgroups:
+        for group in self.process_groups.values():
             process_map.update(group.get_dispatchers())
         return process_map
 
     def shutdown_report(self):
         unstopped = []
 
-        pgroups = self.process_groups.values()
-        for group in pgroups:
+        for group in self.process_groups.values():
             unstopped.extend(group.get_unstopped_processes())
 
         if unstopped:
@@ -188,7 +186,7 @@ class Supervisor:
             combined_map.update(socket_map)
             combined_map.update(self.get_process_map())
 
-            pgroups = self.process_groups.values()
+            pgroups = list(self.process_groups.values())
             pgroups.sort()
 
             if self.options.mood < SupervisorStates.RUNNING:
@@ -206,25 +204,16 @@ class Supervisor:
                     # killing everything), it's OK to swtop or reload
                     raise asyncore.ExitNow
 
-            r, w, x = [], [], []
-
             for fd, dispatcher in combined_map.items():
                 if dispatcher.readable():
-                    r.append(fd)
+                    self.options.poller.register_readable(fd)
                 if dispatcher.writable():
-                    w.append(fd)
+                    self.options.poller.register_writable(fd)
 
-            try:
-                r, w, x = self.options.select(r, w, x, timeout)
-            except select.error, err:
-                r = w = x = []
-                if err.args[0] == errno.EINTR:
-                    self.options.logger.blather('EINTR encountered in select')
-                else:
-                    raise
+            r, w = self.options.poller.poll(timeout)
 
             for fd in r:
-                if combined_map.has_key(fd):
+                if fd in combined_map:
                     try:
                         dispatcher = combined_map[fd]
                         self.options.logger.blather(
@@ -237,7 +226,7 @@ class Supervisor:
                         combined_map[fd].handle_error()
 
             for fd in w:
-                if combined_map.has_key(fd):
+                if fd in combined_map:
                     try:
                         dispatcher = combined_map[fd]
                         self.options.logger.blather(
@@ -278,17 +267,21 @@ class Supervisor:
                 self.ticks[period] = this_tick
                 events.notify(event(this_tick, self))
 
-    def reap(self, once=False):
+    def reap(self, once=False, recursionguard=0):
+        if recursionguard == 100:
+            return
         pid, sts = self.options.waitpid()
         if pid:
             process = self.options.pidhistory.get(pid, None)
             if process is None:
-                self.options.logger.critical('reaped unknown pid %s)' % pid)
+                self.options.logger.info('reaped unknown pid %s' % pid)
             else:
                 process.finish(pid, sts)
                 del self.options.pidhistory[pid]
             if not once:
-                self.reap() # keep reaping until no more kids to reap
+                # keep reaping until no more kids to reap, but don't recurse
+                # infintely
+                self.reap(once=False, recursionguard=recursionguard+1)
 
     def handle_signal(self):
         sig = self.options.get_signal()
@@ -325,7 +318,7 @@ def profile(cmd, globals, locals, sort_order, callers):
     try:
         import cProfile as profile
     except ImportError:
-        import profile # python < 2.5
+        import profile
     import pstats
     import tempfile
     fd, fn = tempfile.mkstemp()

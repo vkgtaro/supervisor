@@ -15,6 +15,9 @@ Dashboards and Tools for Multiple Supervisor Instances
 These are tools that can monitor or control a number of Supervisor
 instances running on different servers.
 
+`cesi <https://github.com/Gamegos/cesi>`_
+    Web-based dashboard written in Python.
+
 `Django-Dashvisor <https://github.com/aleszoulek/django-dashvisor>`_
     Web-based dashboard written in Python.  Requires Django 1.3 or 1.4.
 
@@ -63,7 +66,15 @@ These also includes various event listeners.
 `supervisor-serialrestart <https://github.com/native2k/supervisor-serialrestart>`_
     Adds a ``serialrestart`` command to ``supervisorctl`` that restarts
     processes one after another rather than all at once.
-
+`supervisor-quick <http://lxyu.github.io/supervisor-quick/>`_
+    Adds ``quickstart``, ``quickstop``, and ``quickrestart`` commands to
+    ``supervisorctl`` that can be faster than the built-in commands.  It
+    works by using the non-blocking mode of the XML-RPC methods and then
+    polling ``supervisord``.  The built-in commands use the blocking mode,
+    which can be slower due to ``supervisord`` implementation details.
+`supervisor-logging <https://github.com/infoxchange/supervisor-logging>`_
+    An event listener that sends process log events to an external
+    Syslog instance (e.g. Logstash).
 
 Libraries that integrate Third Party Applications with Supervisor
 -----------------------------------------------------------------
@@ -77,6 +88,8 @@ with third party applications:
     A buildout recipe to install supervisor.
 `puppet-module-supervisor <https://github.com/plathrop/puppet-module-supervisor>`_
     Puppet module for configuring the supervisor daemon tool.
+`puppet-supervisord <https://github.com/ajcrowe/puppet-supervisord>`_
+    Puppet module to manage the supervisord process control system.
 `ngx_supervisord <https://github.com/FRiCKLE/ngx_supervisord>`_
     An nginx module providing API to communicate with supervisord and
     manage (start/stop) backends on-demand.
@@ -84,6 +97,9 @@ with third party applications:
     A Nagios/Icinga plugin written in Python to monitor individual supervisord processes.
 `nagios-supervisord-processes <https://github.com/blablacar/nagios-supervisord-processes>`_
     A Nagios/Icinga plugin written in PHP to monitor individual supervisord processes.
+`supervisord-nagios <https://github.com/3dna/supervisord-nagios>`_
+    A plugin for supervisorctl to allow one to perform nagios-style checks
+    against supervisord-managed processes.
 `php-supervisor-event <https://github.com/mtdowling/php-supervisor-event>`_
     PHP classes for interacting with Supervisor event notifications.
 `PHP5 Supervisor wrapper <https://github.com/yzalis/Supervisor>`_
@@ -111,3 +127,19 @@ with third party applications:
     `Chef <http://www.opscode.com/chef/>`_ cookbook install and configure supervisord.
 `PHP Supervisor <https://github.com/indigophp/supervisor>`_
     PHP client for the supervisord XML-RPC interface. Configuration generator. Event listener work in progress.
+`Supervisord-Client <http://search.cpan.org/~skaufman/Supervisord-Client>`_
+    Perl client for the supervisord XML-RPC interface.
+`Supermann <https://github.com/borntyping/supermann>`_
+    Supermann monitors processes running under Supervisor and sends metrics
+    to `Riemann <http://riemann.io/>`_.
+`gulp-supervisor <https://github.com/leny/gulp-supervisor>`_
+    Run Supervisor as a `Gulp <http://gulpjs.com/>`_ task.
+`Yeebase.Supervisor <https://github.com/yeebase/Yeebase.Supervisor>`_
+    Control and monitor Supervisor from a TYPO3 Flow application.
+`dokku-supervisord <https://github.com/statianzo/dokku-supervisord>`_
+    `Dokku <https://github.com/progrium/dokku>`_ plugin that injects ``supervisord`` to run
+    applications.
+`dokku-logging-supervisord <https://github.com/sehrope/dokku-logging-supervisord>`_
+    `Dokku <https://github.com/progrium/dokku>`_ plugin that injects ``supervisord`` to run
+    applications.  It also redirects ``stdout`` and ``stderr`` from processes to log files
+    (rather than the Docker default per-container JSON files).
